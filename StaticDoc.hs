@@ -69,8 +69,8 @@ postError n = do
 
 retrieveImage :: Handler b StaticDoc ()
 retrieveImage = do
-              c <- contentType
-              modifyResponse $ setContentType (TE.encodeUtf8 c)
+              modifyResponse . setContentType . TE.encodeUtf8 =<< contentType
+
               s <- suffix              
               (StaticDoc _ imagePath) <- get
               exists $ imagePath <> (T.unpack s)        -- ensure it exists
@@ -78,18 +78,12 @@ retrieveImage = do
               
 retrieveDocument :: Handler b StaticDoc ()
 retrieveDocument = do
-                 c <- contentType
-                 modifyResponse $ setContentType (TE.encodeUtf8 c)
+                 modifyResponse . setContentType . TE.encodeUtf8 =<< contentType
 
                  s <- suffix
                  (StaticDoc documentPath _) <- get
                  exists $ documentPath <> (T.unpack s) <.> "md"
                  writeText =<< (liftIO $ inputMarkdown (documentPath <> (T.unpack s) <.> "md"))
-
-
---                 writeText $ T.pack ("Looking for " <> documentPath <> (T.unpack s) <.> "md")
-                 
---              writeText ("Looking for " <> (T.pack imagePath) <> s)
 
 retrieve :: Handler b StaticDoc ()
 retrieve = do

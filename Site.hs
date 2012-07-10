@@ -36,11 +36,6 @@ routes = [  ("/images", with staticDoc retrieve)
          ,  ("", with staticDoc retrieve)
          ]
 
---routes = [ ("/index",    myHandler)
---       , ("",          )
---         , ("",          serveDirectory "static")
---         ]
-
 
 ------------------------------------------------------------------------------
 -- | The application initializer.
