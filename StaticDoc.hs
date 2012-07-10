@@ -33,16 +33,21 @@ data StaticDoc = StaticDoc
 staticInit :: (HasHeist b) => FilePath -> FilePath -> FilePath -> String -> SnapletInit b StaticDoc
 staticInit documents images templates template = makeSnaplet "static-doc" description Nothing $ do
            (addTemplatesAt . TE.encodeUtf8 . T.pack $ (template)) templates
+           addSplices [("insert", liftHeist markdownSplice)]
            return $ StaticDoc documents images template
 
 
-markdownSplice :: SnapletSplice b StaticDoc
-markdownSplice = liftHandler $ do
+markdownSplice :: Splice (Handler b v)
+markdownSplice = do
                input <- getParamNode
                let text = T.unpack $ X.nodeText input
                return [X.TextNode $ T.pack text]
-               
-               
+
+replaceText :: T.Text -> Splice (Handler b v)
+replaceText text = do
+            case X.parseHTML "" (TE.encodeUtf8 text) of
+                 Left error -> return [X.TextNode $ T.pack error]
+                 Right content -> return $ X.docContent content
 
 -- change: we assume it is checked for existence
 inputMarkdown :: FilePath -> IO T.Text
