@@ -23,10 +23,10 @@ description :: T.Text
 description = "Snaplet providing a source of documents"
 
 data StaticDoc = StaticDoc
-                  { documents :: FilePath
-                  , images :: FilePath
-                  , template :: String
-                  , _heist :: Snaplet (Heist StaticDoc)
+                  { documents :: FilePath                       -- path for markdown files
+                  , images :: FilePath                          -- path for image files
+                  , template :: String                          -- specific template to choose
+                  , _heist :: Snaplet (Heist StaticDoc)         -- instance of heist
                   }
 
 makeLens ''StaticDoc
