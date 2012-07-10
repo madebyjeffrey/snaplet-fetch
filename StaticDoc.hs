@@ -97,14 +97,19 @@ retrieveImage = do
               exists $ imagePath <> (T.unpack s)        -- ensure it exists
               sendFile $ imagePath <> (T.unpack s)
               
-retrieveDocument :: Handler b StaticDoc ()
+retrieveDocument :: (HasHeist b) => Handler b StaticDoc ()
 retrieveDocument = do
                  modifyResponse . setContentType . TE.encodeUtf8 =<< contentType
 
                  s <- suffix
                  (StaticDoc documentPath _ _) <- get
                  exists $ documentPath <> (T.unpack s) <.> "md"
-                 writeText =<< (liftIO $ inputMarkdown (documentPath <> (T.unpack s) <.> "md"))
+                 text <- liftIO $  inputMarkdown (documentPath <> (T.unpack s) <.> "md")
+
+--                 writeText text
+                 renderWithSplices "clockworks/main" [("document", liftHeist $ replaceText text)]
+
+--                 writeText =<< (liftIO $)
 
 retrieve :: HasHeist b => Handler b StaticDoc ()
 retrieve = do
