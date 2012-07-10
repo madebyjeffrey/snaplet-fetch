@@ -1,9 +1,10 @@
 {-# LANGUAGE OverloadedStrings, NoMonomorphismRestriction         #-}
-
+{-# LANGUAGE TemplateHaskell #-}
 
 module StaticDoc where
 -- (StaticDoc, staticInit, retrieve, retrieveDocument) where
 
+import Data.Lens.Template
 import Text.Pandoc
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -15,6 +16,8 @@ import Debug.Trace
 import Data.Maybe
 import Data.Monoid
 import System.Directory
+import Snap.Snaplet.Heist
+
 
 description :: T.Text
 description = "Snaplet providing a source of documents"
@@ -22,10 +25,19 @@ description = "Snaplet providing a source of documents"
 data StaticDoc = StaticDoc
                   { documents :: FilePath
                   , images :: FilePath
+                  , template :: String
+                  , _heist :: Snaplet (Heist StaticDoc)
                   }
 
-staticInit :: FilePath -> FilePath -> SnapletInit b StaticDoc
-staticInit documents images = makeSnaplet "static-doc" description Nothing $ pure $ StaticDoc documents images
+makeLens ''StaticDoc
+
+instance HasHeist StaticDoc where
+         heistLens = subSnaplet heist
+
+-- staticInit :: FilePath -> FilePath -> FilePath -> String -> SnapletInit b StaticDoc
+staticInit documents images templates template = makeSnaplet "static-doc" description Nothing $ do
+           h <- nestSnaplet "" heist $ heistInit templates
+           return $ StaticDoc documents images template h
 
 
 -- change: we assume it is checked for existence
@@ -72,7 +84,7 @@ retrieveImage = do
               modifyResponse . setContentType . TE.encodeUtf8 =<< contentType
 
               s <- suffix              
-              (StaticDoc _ imagePath) <- get
+              (StaticDoc _ imagePath _ _) <- get
               exists $ imagePath <> (T.unpack s)        -- ensure it exists
               sendFile $ imagePath <> (T.unpack s)
               
@@ -81,7 +93,7 @@ retrieveDocument = do
                  modifyResponse . setContentType . TE.encodeUtf8 =<< contentType
 
                  s <- suffix
-                 (StaticDoc documentPath _) <- get
+                 (StaticDoc documentPath _ _ _) <- get
                  exists $ documentPath <> (T.unpack s) <.> "md"
                  writeText =<< (liftIO $ inputMarkdown (documentPath <> (T.unpack s) <.> "md"))
 

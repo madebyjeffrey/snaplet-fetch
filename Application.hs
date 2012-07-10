@@ -16,15 +16,10 @@ import StaticDoc
 
 ------------------------------------------------------------------------------
 data App = App
-    { _heist :: Snaplet (Heist App)
-    , _staticDoc :: Snaplet StaticDoc
+    { _staticDoc :: Snaplet StaticDoc
     }
 
 makeLens ''App
-
-instance HasHeist App where
-    heistLens = subSnaplet heist
-
 
 ------------------------------------------------------------------------------
 type AppHandler = Handler App App

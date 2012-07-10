@@ -41,8 +41,10 @@ routes = [  ("/images", with staticDoc retrieve)
 -- | The application initializer.
 app :: SnapletInit App App
 app = makeSnaplet "app" "An snaplet example application." Nothing $ do
-    h <- nestSnaplet "" heist $ heistInit "templates"
-    s <- nestSnaplet "" staticDoc $ staticInit "/Users/drakej/Code/SOCRweb/wiki" "/Users/drakej/Code/SOCRweb/images"
+    s <- nestSnaplet "" staticDoc $ staticInit "/Users/drakej/Code/SOCRweb/wiki" 
+                                               "/Users/drakej/Code/SOCRweb/images"
+                                               "/Users/drakej/Code/SOCRweb/templates"
+                                               "clockworks"
     addRoutes routes
-    return $ App h s
+    return $ App s
 
