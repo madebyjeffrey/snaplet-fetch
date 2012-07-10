@@ -17,6 +17,8 @@ import Data.Maybe
 import Data.Monoid
 import System.Directory
 import Snap.Snaplet.Heist
+import Text.Templating.Heist
+import qualified Text.XmlHtml as X
 
 
 description :: T.Text
@@ -26,19 +28,21 @@ data StaticDoc = StaticDoc
                   { documents :: FilePath                       -- path for markdown files
                   , images :: FilePath                          -- path for image files
                   , template :: String                          -- specific template to choose
-                  , _heist :: Snaplet (Heist StaticDoc)         -- instance of heist
                   }
 
-makeLens ''StaticDoc
-
-instance HasHeist StaticDoc where
-         heistLens = subSnaplet heist
-
--- staticInit :: FilePath -> FilePath -> FilePath -> String -> SnapletInit b StaticDoc
+staticInit :: (HasHeist b) => FilePath -> FilePath -> FilePath -> String -> SnapletInit b StaticDoc
 staticInit documents images templates template = makeSnaplet "static-doc" description Nothing $ do
-           h <- nestSnaplet "" heist $ heistInit templates
-           return $ StaticDoc documents images template h
+           (addTemplatesAt . TE.encodeUtf8 . T.pack $ (template)) templates
+           return $ StaticDoc documents images template
 
+
+markdownSplice :: SnapletSplice b StaticDoc
+markdownSplice = liftHandler $ do
+               input <- getParamNode
+               let text = T.unpack $ X.nodeText input
+               return [X.TextNode $ T.pack text]
+               
+               
 
 -- change: we assume it is checked for existence
 inputMarkdown :: FilePath -> IO T.Text
@@ -84,7 +88,7 @@ retrieveImage = do
               modifyResponse . setContentType . TE.encodeUtf8 =<< contentType
 
               s <- suffix              
-              (StaticDoc _ imagePath _ _) <- get
+              (StaticDoc _ imagePath _) <- get
               exists $ imagePath <> (T.unpack s)        -- ensure it exists
               sendFile $ imagePath <> (T.unpack s)
               
@@ -93,11 +97,11 @@ retrieveDocument = do
                  modifyResponse . setContentType . TE.encodeUtf8 =<< contentType
 
                  s <- suffix
-                 (StaticDoc documentPath _ _ _) <- get
+                 (StaticDoc documentPath _ _) <- get
                  exists $ documentPath <> (T.unpack s) <.> "md"
                  writeText =<< (liftIO $ inputMarkdown (documentPath <> (T.unpack s) <.> "md"))
 
-retrieve :: Handler b StaticDoc ()
+retrieve :: HasHeist b => Handler b StaticDoc ()
 retrieve = do
          (Just route) <- getRoutePattern
          
