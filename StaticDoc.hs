@@ -106,8 +106,15 @@ retrieveDocument = do
                  exists $ documentPath <> (T.unpack s) <.> "md"
                  text <- liftIO $  inputMarkdown (documentPath <> (T.unpack s) <.> "md")
 
+--                 let s = withHeistTS $ hasTemplate "main"
+--                 case s of 
+--                      True -> writeText "Has main template"
+--                      False -> writeText "No no main template"
+
+                 templates <- withHeistTS templateNames; liftIO (print templates)
+
 --                 writeText text
-                 renderWithSplices "clockworks/main" [("document", liftHeist $ replaceText text)]
+                 renderWithSplices "clockworks/clockworks/main" [("document", liftHeist $ replaceText text)]
 
 --                 writeText =<< (liftIO $)
 
