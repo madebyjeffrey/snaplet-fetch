@@ -3,6 +3,7 @@
 
 module Snap.Snaplet.Fetch 
        ( fetchInit
+       , fetchInitWithoutConfigFileTabernac
        , Fetch(..)
        , retrieve
        , retrieveDocument
@@ -45,8 +46,8 @@ logErr err m = do
 (∆) = flip $ (`maybe` Right) . Left
 
 
-fetchInit :: (HasHeist b, (MonadSnap ((->) Fetch))) => SnapletInit b Fetch
-fetchInit = makeSnaplet "static-doc" description Nothing $ do
+fetchInit :: (HasHeist b) => SnapletInit b Fetch
+fetchInit = makeSnaplet "fetch" description Nothing $ do
           config <- getSnapletUserConfig
           (config', errs) <- runWriterT $ do
                   docroot <- logErr "Must specify a document root (docroot)" $ C.lookup config "docroot"
@@ -54,13 +55,21 @@ fetchInit = makeSnaplet "static-doc" description Nothing $ do
                   theme <- logErr "Must specify a theme" $ C.lookup config "theme"
                   return $ Config <$> docroot <*> templateroot <*> theme
           case config' ∆ errs of
-               Left errs' -> (logError $ TE.encodeUtf8 $ T.intercalate "\n" errs') >> return $ Fetch "" ""   -- security??
+               Left errs' -> do
+                    logError $ TE.encodeUtf8 $ T.intercalate "\n" errs'
+                    return $ Fetch "" ""   -- security??
                Right (Config docroot templateroot theme) -> do
                      addTemplatesAt "" templateroot
                      addSplices [("insert", liftHeist markdownSplice)]
                      addRoutes [("", retrieveDocument)]
                      return $ Fetch docroot theme
 
+fetchInitWithoutConfigFileTabernac :: (HasHeist b) => FilePath -> FilePath -> String -> SnapletInit b Fetch
+fetchInitWithoutConfigFileTabernac docRoot templateroot theme = makeSnaplet "fetch" description Nothing $ do
+                                   addTemplatesAt "" templateroot
+                                   addSplices [("insert", liftHeist markdownSplice)]
+                                   addRoutes [("", retrieveDocument)]
+                                   return $ Fetch docRoot theme
 
 --          let ci = fromMaybe (error $ intercalate "\n" errs) config
 {-
