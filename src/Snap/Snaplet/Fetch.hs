@@ -1,8 +1,11 @@
 {-# LANGUAGE OverloadedStrings, NoMonomorphismRestriction         #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module StaticDoc where
--- (StaticDoc, staticInit, retrieve, retrieveDocument) where
+module Snap.Snaplet.Fetch 
+       ( fetchInit
+       , Fetch(..)
+       , retrieve)
+       where
 
 import Data.Lens.Template
 import Text.Pandoc
@@ -22,16 +25,16 @@ import qualified Text.XmlHtml as X
 
 
 description :: T.Text
-description = "Snaplet providing a source of documents"
+description = "Fetch provides a source of documents"
 
-data StaticDoc = StaticDoc
+data Fetch = Fetch
                   { documents :: FilePath                       -- path for markdown files
                   , images :: FilePath                          -- path for image files
                   , template :: String                          -- specific template to choose
                   }
 
-staticInit :: (HasHeist b) => FilePath -> FilePath -> FilePath -> String -> SnapletInit b StaticDoc
-staticInit documents images templates template = makeSnaplet "static-doc" description Nothing $ do
+fetchInit :: (HasHeist b) => FilePath -> FilePath -> FilePath -> String -> SnapletInit b Fetch
+fetchInit documents images templates template = makeSnaplet "static-doc" description Nothing $ do
            (addTemplatesAt . TE.encodeUtf8 . T.pack $ (template)) templates
            addSplices [("insert", liftHeist markdownSplice)]
            return $ StaticDoc documents images template
@@ -111,7 +114,7 @@ retrieveDocument = do
 --                      True -> writeText "Has main template"
 --                      False -> writeText "No no main template"
 
-                 templates <- withHeistTS templateNames; liftIO (print templates)
+--                 templates <- withHeistTS templateNames; liftIO (print templates)
 
 --                 writeText text
                  renderWithSplices "clockworks/clockworks/main" [("document", liftHeist $ replaceText text)]
