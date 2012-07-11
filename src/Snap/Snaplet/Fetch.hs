@@ -4,7 +4,9 @@
 module Snap.Snaplet.Fetch 
        ( fetchInit
        , Fetch(..)
-       , retrieve)
+       , retrieve
+       , retrieveDocument
+       , retrieveImage)
        where
 
 import Data.Lens.Template
@@ -28,16 +30,17 @@ description :: T.Text
 description = "Fetch provides a source of documents"
 
 data Fetch = Fetch
-                  { documents :: FilePath                       -- path for markdown files
-                  , images :: FilePath                          -- path for image files
+                  { documents :: FilePath                       -- document Root
                   , template :: String                          -- specific template to choose
                   }
 
 fetchInit :: (HasHeist b) => FilePath -> FilePath -> FilePath -> String -> SnapletInit b Fetch
-fetchInit documents images templates template = makeSnaplet "static-doc" description Nothing $ do
+fetchInit documents templates template = makeSnaplet "static-doc" description Nothing $ do
            (addTemplatesAt . TE.encodeUtf8 . T.pack $ (template)) templates
            addSplices [("insert", liftHeist markdownSplice)]
-           return $ StaticDoc documents images template
+           addRoutes [ ("", retriveDocument ) ]
+
+           return $ StaticDoc documents template
 
 
 markdownSplice :: Splice (Handler b v)
@@ -96,7 +99,7 @@ retrieveImage = do
               modifyResponse . setContentType . TE.encodeUtf8 =<< contentType
 
               s <- suffix              
-              (StaticDoc _ imagePath _) <- get
+              (StaticDoc imagePath _) <- get
               exists $ imagePath <> (T.unpack s)        -- ensure it exists
               sendFile $ imagePath <> (T.unpack s)
               
@@ -105,7 +108,7 @@ retrieveDocument = do
                  modifyResponse . setContentType . TE.encodeUtf8 =<< contentType
 
                  s <- suffix
-                 (StaticDoc documentPath _ _) <- get
+                 (StaticDoc documentPath _) <- get
                  exists $ documentPath <> (T.unpack s) <.> "md"
                  text <- liftIO $  inputMarkdown (documentPath <> (T.unpack s) <.> "md")
 
@@ -122,7 +125,10 @@ retrieveDocument = do
 --                 writeText =<< (liftIO $)
 
 retrieve :: HasHeist b => Handler b StaticDoc ()
-retrieve = do
+retrieve = retrieveDocument
+
+{-
+do
          (Just route) <- getRoutePattern
          
          case route of
@@ -130,8 +136,4 @@ retrieve = do
               "" -> retrieveDocument
               _ -> postError 404
 
-
-                 
-
-                                                      
-   
+-}
