@@ -16,7 +16,7 @@ Extra-source-files:  README, LICENSE
 Cabal-version:       >=1.6
 
 data-files:
-  resources/devel.cfg
+  resources/snaplet.cfg
 
 source-repository head
   type:     git
@@ -51,7 +51,8 @@ Library
     heist                      >= 0.8, 
     filepath                   >= 1.2, 
     xmlhtml                    >= 0.2.0.2,
-    transformers               >= 0.3.0.0
+    transformers               >= 0.3.0.0,
+    unordered-containers       >= 0.2.1.0
 
 
   ghc-options: -Wall -fwarn-tabs -funbox-strict-fields

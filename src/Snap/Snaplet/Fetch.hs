@@ -7,12 +7,14 @@ module Snap.Snaplet.Fetch
        , Fetch(..)
        , retrieve
        , retrieveDocument
-       , retrieveImage)
+       , retrieveBinary)
        where
 
 import Text.Pandoc
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import qualified Data.HashMap.Strict as H
+import System.Exit
 import Snap
 import Data.Maybe
 import System.FilePath
@@ -20,10 +22,13 @@ import Data.Monoid
 import System.Directory
 import Snap.Snaplet.Heist
 import Text.Templating.Heist
+import Snap.Util.FileServe
 import qualified Text.XmlHtml as X
+import qualified Text.Blaze.Renderer.XmlHtml as X2
 import qualified Data.Configurator as C
 import           Control.Monad.Trans.Writer
 
+import Paths_snaplet_fetch
 
 description :: T.Text
 description = "Fetch provides a source of documents"
@@ -34,6 +39,9 @@ data Fetch = Fetch
                   }
 
 data Config = Config String String String
+
+dataDir :: IO [Char]
+dataDir = liftM (++"/resources") getDataDir
 
 logErr :: MonadIO m
        => t -> IO (Maybe a) -> WriterT [t] m (Maybe a)
@@ -47,7 +55,7 @@ logErr err m = do
 
 
 fetchInit :: (HasHeist b) => SnapletInit b Fetch
-fetchInit = makeSnaplet "fetch" description Nothing $ do
+fetchInit = makeSnaplet "fetch" description (Just dataDir) $ do
           config <- getSnapletUserConfig
           (config', errs) <- runWriterT $ do
                   docroot <- logErr "Must specify a document root (docroot)" $ C.lookup config "docroot"
@@ -56,19 +64,25 @@ fetchInit = makeSnaplet "fetch" description Nothing $ do
                   return $ Config <$> docroot <*> templateroot <*> theme
           case config' ∆ errs of
                Left errs' -> do
-                    logError $ TE.encodeUtf8 $ T.intercalate "\n" errs'
-                    return $ Fetch "" ""   -- security??
+                    printInfo $ T.intercalate "\n" errs'
+                    liftIO $ do putStrLn "Ack!"; exitWith (ExitFailure 1)
+--                    fail "Errors cannot proceed"
+--                    return $ Fetch "" ""   -- security??
                Right (Config docroot templateroot theme) -> do
                      addTemplatesAt "" templateroot
-                     addSplices [("insert", liftHeist markdownSplice)]
-                     addRoutes [("", retrieveDocument)]
+                     addSplices [("insert", liftHeist (markdownSplice docroot))]
+                     addRoutes [ ("/themes", serveDirectory templateroot)
+                               , ("", retrieve)
+                               ]
                      return $ Fetch docroot theme
 
 fetchInitWithoutConfigFileTabernac :: (HasHeist b) => FilePath -> FilePath -> String -> SnapletInit b Fetch
 fetchInitWithoutConfigFileTabernac docRoot templateroot theme = makeSnaplet "fetch" description Nothing $ do
                                    addTemplatesAt "" templateroot
-                                   addSplices [("insert", liftHeist markdownSplice)]
-                                   addRoutes [("", retrieveDocument)]
+                                   addSplices [("insert", liftHeist (markdownSplice docRoot))]
+                                   addRoutes [ ("/themes", serveDirectory templateroot)
+                                             , ("", retrieve)
+                                             ]
                                    return $ Fetch docRoot theme
 
 --          let ci = fromMaybe (error $ intercalate "\n" errs) config
@@ -92,11 +106,23 @@ fetchInitWithoutConfigFileTabernac docRoot templateroot theme = makeSnaplet "fet
            return $ Fetch docs theme
 -}
 
-markdownSplice :: Splice (Handler b v)
-markdownSplice = do
+markdownSplice :: FilePath -> Splice (Handler b v)
+markdownSplice documentPath = do
                input <- getParamNode
-               let text = T.unpack $ X.nodeText input
-               return [X.TextNode $ T.pack text]
+               let elements = X.elementAttrs input
+               let attr = lookup "document" elements
+
+               liftIO (print ( show elements))
+
+--               (Fetch documentPath _) <-  get
+--                 exists $ documentPath <> (T.unpack s) <.> "md"
+--                 text <- liftIO $ inputMarkdown (documentPath <> (T.unpack s) <.> "md")
+
+               case attr of
+                    Just fileName -> liftIO $ inputMarkdown' (documentPath </> (T.unpack fileName))
+                    Nothing -> return [X.TextNode $ T.pack "No document attribute found"]
+--               let text = T.unpack $ X.nodeText input
+  --             return [X.TextNode $ T.pack text]
 
 replaceText :: T.Text -> Splice (Handler b v)
 replaceText text = do
@@ -112,6 +138,14 @@ inputMarkdown filePath = do
                  let html = writeHtmlString defaultWriterOptions doc
                  pure $ T.pack html
 
+inputMarkdown' :: FilePath -> IO [X.Node]
+inputMarkdown' filePath = do
+                 fileContents <- readFile filePath
+                 let doc = readMarkdown defaultParserState fileContents
+                 let html = writeHtml defaultWriterOptions doc
+                 pure $ X2.renderHtmlNodes html
+
+
 -- assume that we have a route
 suffix :: Handler b Fetch T.Text
 suffix = do
@@ -119,6 +153,11 @@ suffix = do
        let route' = TE.decodeUtf8 theroute
        path' <- withRequest (pure . TE.decodeUtf8 . rqURI)
        pure $ T.drop (T.length route') path'
+
+extension :: Handler b Fetch FilePath
+extension = do
+            filePath <- withRequest (pure . T.unpack . TE.decodeUtf8 . rqURI)
+            pure $ takeExtension filePath
 
 contentType :: Handler b Fetch T.Text
 contentType = do
@@ -143,9 +182,9 @@ postError n = do
       r <- getResponse
       finishWith r
 
-retrieveImage :: Handler b Fetch ()
-retrieveImage = do
-              modifyResponse . setContentType . TE.encodeUtf8 =<< contentType
+retrieveBinary :: Handler b Fetch ()
+retrieveBinary = do
+--              modifyResponse . setContentType . TE.encodeUtf8 =<< contentType
 
               s <- suffix              
               (Fetch imagePath _) <- get
@@ -154,27 +193,39 @@ retrieveImage = do
               
 retrieveDocument :: (HasHeist b) => Handler b Fetch ()
 retrieveDocument = do
-                 modifyResponse . setContentType . TE.encodeUtf8 =<< contentType
+                -- modifyResponse . setContentType . TE.encodeUtf8 =<< contentType
 
                  s <- suffix
-                 (Fetch documentPath _) <- get
+                 (Fetch documentPath theme) <- get
                  exists $ documentPath <> (T.unpack s) <.> "md"
-                 text <- liftIO $  inputMarkdown (documentPath <> (T.unpack s) <.> "md")
+                 text <- liftIO $ inputMarkdown (documentPath <> (T.unpack s) <.> "md")
 
 --                 let s = withHeistTS $ hasTemplate "main"
 --                 case s of 
 --                      True -> writeText "Has main template"
 --                      False -> writeText "No no main template"
 
---                 templates <- withHeistTS templateNames; liftIO (print templates)
-
+                 templates <- withHeistTS templateNames; liftIO (print templates)
+                 liftIO (print ( theme </> "main"))
 --                 writeText text
-                 renderWithSplices "clockworks/main" [("document", liftHeist $ replaceText text)]
+                 renderWithSplices (TE.encodeUtf8 . T.pack $ theme </> "main") [("document", liftHeist $ replaceText text)]
 
 --                 writeText =<< (liftIO $)
 
 retrieve :: HasHeist b => Handler b Fetch ()
-retrieve = retrieveDocument
+retrieve = do
+         ext <- extension
+         case ext of
+              "" -> do
+                        modifyResponse $ setContentType (H.lookupDefault "text/html" ".html" defaultMimeTypes)
+                        retrieveDocument
+              _ -> do 
+                        modifyResponse $ setContentType (H.lookupDefault "text/html" ext defaultMimeTypes)
+                        retrieveBinary
+
+         
+
+
 
 {-
 do
