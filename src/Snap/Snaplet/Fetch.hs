@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings, NoMonomorphismRestriction         #-}
-{-# LANGUAGE TemplateHaskell, FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell, FlexibleContexts                    #-}
 
 module Snap.Snaplet.Fetch 
        ( fetchInit
@@ -66,8 +66,6 @@ fetchInit = makeSnaplet "fetch" description (Just dataDir) $ do
                Left errs' -> do
                     printInfo $ T.intercalate "\n" errs'
                     liftIO $ do putStrLn "Ack!"; exitWith (ExitFailure 1)
---                    fail "Errors cannot proceed"
---                    return $ Fetch "" ""   -- security??
                Right (Config docroot templateroot theme) -> do
                      addTemplatesAt "" templateroot
                      addSplices [("insert", liftHeist (markdownSplice docroot))]
@@ -85,44 +83,17 @@ fetchInitWithoutConfigFileTabernac docRoot templateroot theme = makeSnaplet "fet
                                              ]
                                    return $ Fetch docRoot theme
 
---          let ci = fromMaybe (error $ intercalate "\n" errs) config
-{-
-          addTemplatesAt "" templates
-          addSplices [("insert", liftHeist markdownSplice)]
-          addRoutes [("", retrieveDocument)]
-
-          return $ Fetch docs theme          
--}
-{-
-
-                          host <- logErr "Must specify postgres host" $ C.lookup config "host"
-
-
---           (addTemplatesAt . TE.encodeUtf8 . T.pack $ (template)) templates
-           addTemplatesAt "" templates
-           addSplices [("insert", liftHeist markdownSplice)]
-           addRoutes [ ("", retrieveDocument ) ]
-
-           return $ Fetch docs theme
--}
 
 markdownSplice :: FilePath -> Splice (Handler b v)
 markdownSplice documentPath = do
                input <- getParamNode
                let elements = X.elementAttrs input
                let attr = lookup "document" elements
-
-               liftIO (print ( show elements))
-
---               (Fetch documentPath _) <-  get
---                 exists $ documentPath <> (T.unpack s) <.> "md"
---                 text <- liftIO $ inputMarkdown (documentPath <> (T.unpack s) <.> "md")
+--               liftIO (print ( show elements))
 
                case attr of
                     Just fileName -> liftIO $ inputMarkdown' (documentPath </> (T.unpack fileName))
                     Nothing -> return [X.TextNode $ T.pack "No document attribute found"]
---               let text = T.unpack $ X.nodeText input
-  --             return [X.TextNode $ T.pack text]
 
 replaceText :: T.Text -> Splice (Handler b v)
 replaceText text = do
@@ -184,8 +155,6 @@ postError n = do
 
 retrieveBinary :: Handler b Fetch ()
 retrieveBinary = do
---              modifyResponse . setContentType . TE.encodeUtf8 =<< contentType
-
               s <- suffix              
               (Fetch imagePath _) <- get
               exists $ imagePath <> (T.unpack s)        -- ensure it exists
@@ -193,24 +162,15 @@ retrieveBinary = do
               
 retrieveDocument :: (HasHeist b) => Handler b Fetch ()
 retrieveDocument = do
-                -- modifyResponse . setContentType . TE.encodeUtf8 =<< contentType
-
                  s <- suffix
                  (Fetch documentPath theme) <- get
                  exists $ documentPath <> (T.unpack s) <.> "md"
                  text <- liftIO $ inputMarkdown (documentPath <> (T.unpack s) <.> "md")
 
---                 let s = withHeistTS $ hasTemplate "main"
---                 case s of 
---                      True -> writeText "Has main template"
---                      False -> writeText "No no main template"
-
                  templates <- withHeistTS templateNames; liftIO (print templates)
                  liftIO (print ( theme </> "main"))
---                 writeText text
                  renderWithSplices (TE.encodeUtf8 . T.pack $ theme </> "main") [("document", liftHeist $ replaceText text)]
 
---                 writeText =<< (liftIO $)
 
 retrieve :: HasHeist b => Handler b Fetch ()
 retrieve = do
@@ -222,18 +182,3 @@ retrieve = do
               _ -> do 
                         modifyResponse $ setContentType (H.lookupDefault "text/html" ext defaultMimeTypes)
                         retrieveBinary
-
-         
-
-
-
-{-
-do
-         (Just route) <- getRoutePattern
-         
-         case route of
-              "/images" -> retrieveImage 
-              "" -> retrieveDocument
-              _ -> postError 404
-
--}
